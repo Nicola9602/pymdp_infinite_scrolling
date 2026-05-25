@@ -100,7 +100,7 @@ model.D["post_valence"]["neutral"] = 0.5
 model.D["post_valence"].normalize()
 
 # What could the platform observe from the person?
-
+#this is a good question 
 # Keep it minimal. The platform does not need to observe the person’s internal state directly. It observes behavioural proxies, for example:
 
 # skip          = user scrolls quickly
