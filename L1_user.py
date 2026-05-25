@@ -16,8 +16,13 @@ POST_REWARD = ["reward", "no_reward"]
 L1_ACTIONS = ["scroll"]
 p_liking_negative = 0.7
 p_liking_positive = 0.5
-p_like = 0.7
-p_dislike = 0.3 
+
+##!! THIS WILL BE THE ALGORITHM AGENT TASK TO ASSIGN
+#AND SWITCH THESE TO KEEP THE USER ENGAGED
+#This acutually later will be done by the other agent 
+p_positive = 0.5
+p_negative = 0.3
+p_neutral = 0.2 
  
 model_description = { 
     "observations": { 
@@ -66,9 +71,11 @@ model.A["post_valence"]["neutral", "neutral"] = 1
 model.A["post_valence"].normalize()
 
 model.A["post_reward"]["reward", "negative"] = p_liking_negative 
-model.A["post_reward"]["no_reward", "negative"] = 1 - p_liking_negative
+model.A["post_reward"]["no_reward", "positive"] = 1 - p_liking_negative
 model.A["post_reward"]["reward", "positive"] = p_liking_positive
 model.A["post_reward"]["no_reward", "negative"] = 1 - p_liking_positive
+model.A["post_reward"]["no_reward", "neutral"] = 0.99 # Always receive neutral in no reward
+model.A["post_reward"]["no_reward", "neutral"] = 0.01
 model.A["post_reward"].normalize()
 # B transitions 
 # B["to", "from", "action"]
@@ -77,17 +84,12 @@ model.A["post_reward"].normalize()
 # later on I actually want an algorithm adjusting these weights depending on what it 
 # observes from the person 
 
-model.B["post_valence"]["positive", "positive", "scroll"] = p_like
-model.B["post_valence"]["positive", "negative", "scroll"] = p_like
-model.B["post_valence"]["negative", "negative", "scroll"] = p_dislike
-model.B["post_valence"]["negative", "positive", "scroll"] = p_dislike
+for previous_valence in POST_VALENCE:
+    model.B["post_valence"]["positive", previous_valence, "scroll"] = p_positive
+    model.B["post_valence"]["negative", previous_valence, "scroll"] = p_negative
+    model.B["post_valence"]["neutral", previous_valence, "scroll"] = p_neutral
+
 model.B["post_valence"].normalize()
-#Give a C 
-#------------------------------------------------------------------------
-# Here I can set the agent preferring negative content rather than positive content 
-model.C["post_valence"]["like"] = p_liking_positive
-model.C["post_valence"]["dislike"] = p_liking_negative
-model.C["post_valence"].normalize()
 
 # Give a D 
 #------------------------------------------------------------------------
