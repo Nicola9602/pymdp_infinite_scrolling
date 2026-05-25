@@ -63,12 +63,13 @@ model.A["post_obs"]["post", "scroll"] = 1
 model.A["post_valence"]["negative", "negative"] = 1
 model.A["post_valence"]["positive", "positive"] = 1
 model.A["post_valence"]["neutral", "neutral"] = 1 
+model.A["post_valence"].normalize()
 
 model.A["post_reward"]["reward", "negative"] = p_liking_negative 
 model.A["post_reward"]["no_reward", "negative"] = 1 - p_liking_negative
 model.A["post_reward"]["reward", "positive"] = p_liking_positive
 model.A["post_reward"]["no_reward", "negative"] = 1 - p_liking_positive
-
+model.A["post_reward"].normalize()
 # B transitions 
 # B["to", "from", "action"]
 #------------------------------------------------------------------------
@@ -80,10 +81,39 @@ model.B["post_valence"]["positive", "positive", "scroll"] = p_like
 model.B["post_valence"]["positive", "negative", "scroll"] = p_like
 model.B["post_valence"]["negative", "negative", "scroll"] = p_dislike
 model.B["post_valence"]["negative", "positive", "scroll"] = p_dislike
-
+model.B["post_valence"].normalize()
 #Give a C 
 #------------------------------------------------------------------------
 # Here I can set the agent preferring negative content rather than positive content 
 model.C["post_valence"]["like"] = p_liking_positive
 model.C["post_valence"]["dislike"] = p_liking_negative
+model.C["post_valence"].normalize()
 
+# Give a D 
+#------------------------------------------------------------------------
+#Whcih kind of first post is the user expecting
+model.D["post_valence"]["positive"] = 0.5
+model.D["post_valence"]["negative"] = 0.5
+model.D["post_valence"]["neutral"] = 0.5
+model.D["post_valence"].normalize()
+
+# What could the platform observe from the person?
+
+# Keep it minimal. The platform does not need to observe the person’s internal state directly. It observes behavioural proxies, for example:
+
+# skip          = user scrolls quickly
+# dwell         = user stays on the post
+# like_click    = user clicks like
+# continue      = user keeps scrolling
+# quit          = user leaves the session
+
+# A “hooked” user is not directly observed. It should be a hidden state inferred from behaviour.
+
+# For example:
+
+# ENGAGEMENT = ["low", "high"]
+
+# Then:
+
+# high engagement → more likely to dwell / continue
+# low engagement  → more likely to skip / leave
