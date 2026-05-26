@@ -8,7 +8,14 @@ from pymdp.envs.env import Env
 from pymdp.envs import rollout
 
 
-from config import Config
+from config import(
+    POST_OBS,
+    POST_VALENCE,
+    POST_REWARD,
+    L1_ACTIONS,
+    p_liking_negative,
+    p_liking_positive,
+)
 
 POST_OBS = ["post"]
 POST_VALENCE = ["positive", "negative", "neutral"]
