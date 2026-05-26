@@ -1,3 +1,7 @@
+# L1 user 
+# 26/05/2026
+
+
 import pymdp
 import jax.tree_util as jtu
 from jax import numpy as jnp
