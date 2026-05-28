@@ -7,6 +7,24 @@ from pymdp.distribution import compile_model
 from pymdp.envs.env import Env
 from pymdp.envs import rollout
 
+"""
+This should be the whole Marshmellow model 
+
+continue_scrolling:
+    observe L1 reports
+    get quick_reward
+    risk moving from scrolling_ok to scrolling_hooked
+    eventually observe bad_feeling
+
+opt_out:
+    observe no_post
+    get no_reward first
+    observe urge
+    later reach recovered
+    get delayed_reward and relief
+
+"""
+
 
 #This is actually wrong and must be updated later. 
 #the positive negative should come from the lower level not be
@@ -260,7 +278,7 @@ def init_L2_model():
     #========================================================================
     # Function closure 
     #========================================================================
-    
+
     mappings = {
         "l1_valence_report_names": L1_VALENCE_REPORT,
         "self_state_names": SELF_STATE,
