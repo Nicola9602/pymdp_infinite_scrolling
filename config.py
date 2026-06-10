@@ -1,28 +1,36 @@
 # config.py
-# 26/05/2026
-# L1
-POST_OBS = ["post"]
+
+# -----------------------------
+# Level 1: passive post stream
+# -----------------------------
 POST_VALENCE = ["positive", "negative", "neutral"]
 POST_REWARD = ["reward", "no_reward"]
 L1_ACTIONS = ["scroll"]
 
-p_liking_negative = 0.7
-p_liking_positive = 0.5
+# Agent's belief about quick reward probability conditional on post valence.
+P_REWARD_IF_POSITIVE = 0.7
+P_REWARD_IF_NEGATIVE = 0.8
+P_REWARD_IF_NEUTRAL = 0.01
 
-# L2
+# Baseline feed distribution used by the L1 environment and L1/L2 generative models.
+P_POSITIVE = 0.40
+P_NEGATIVE = 0.59
+P_NEUTRAL = 0.01
 
+# -----------------------------
+# Level 2: marshmallow level
+# -----------------------------
 L1_VALENCE_REPORT = ["positive", "negative", "neutral", "no_post"]
 
-SELF_STATE = ["scrolling_ok", "scrolling_hooked", "withdrawal_1", 
-              "withdrawal_2", "recovered"]
+SELF_STATE = [
+    "scrolling_ok",
+    "scrolling_hooked",
+    "withdrawal_1",
+    "withdrawal_2",
+    "recovered_reward",
+    "recovered_no_reward"
+]
 
-REWARD_REPORT = ["no_reward","quick_reward", "delayed_reward"]
-
-AFFECT_OBS = ["okay","urge","bad_feeling","relief"]
-
-L2_ACTIONS = ["continue_scrolling","opt_out"]
-
-# Baseline belief about what the feed tends to show.
-P_POSITIVE = 0.5
-P_NEGATIVE = 0.3
-P_NEUTRAL = 0.2
+REWARD_REPORT = ["no_reward", "quick_reward", "delayed_reward"]
+AFFECT_OBS = ["okay", "scroll_relief", "urge", "bad_feeling", "deep_relief", "boredom"]
+L2_ACTIONS = ["continue_scrolling", "opt_out"]

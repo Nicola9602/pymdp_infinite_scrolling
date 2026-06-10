@@ -1,104 +1,105 @@
 # L1_scrolling_env.py
 
-import numpy as np
+from jax import numpy as jnp
+from jax import random as jr
 
-from config import POST_VALENCE
+from config import (
+    POST_VALENCE,
+    POST_REWARD,
+    P_POSITIVE,
+    P_NEGATIVE,
+    P_NEUTRAL,
+    P_REWARD_IF_POSITIVE,
+    P_REWARD_IF_NEGATIVE,
+    P_REWARD_IF_NEUTRAL,
+)
 
-
-POST_OBS = ["post"]
-POST_REWARD = ["reward", "no_reward"]
 
 class L1ScrollingEnv:
     """
     Level 1 generative process.
 
-    This environment generates one post at a time.
+    Returns batched discrete observations for pymdp/JAX:
 
-    It does NOT generate no_post.
-    no_post belongs to L2, because it happens when the higher level opts out.
+        obs_l1 = [
+            jnp.array([post_valence_obs_idx]),
+            jnp.array([post_reward_obs_idx]),
+        ]
+
+    Shape is (batch_size,), not (batch_size, time).
     """
 
     def __init__(
-            self, 
-            p_positive = 0.5,
-            p_negative = 0.3,
-            p_neutral = 0.2,
-            p_reward_if_positive = 0.5,
-            p_reward_if_negative = 0.7,
-            p_reward_if_neutral = 0.1,
-            seed=None,
-    ): 
-        self.rng = np.random.default.rng(seed)
+        self,
+        p_positive=P_POSITIVE,
+        p_negative=P_NEGATIVE,
+        p_neutral=P_NEUTRAL,
+        p_reward_if_positive=P_REWARD_IF_POSITIVE,
+        p_reward_if_negative=P_REWARD_IF_NEGATIVE,
+        p_reward_if_neutral=P_REWARD_IF_NEUTRAL,
+    ):
+        valence_probs = jnp.array(
+            [p_positive, p_negative, p_neutral],
+            dtype=jnp.float32,
+        )
 
-        self.valence_probs = {
-            "positive": p_positive,
-            "negative": p_negative,
-            "neutral": p_neutral,
-        }
-        
-        self.reward_probs = {
-            "positive": p_reward_if_positive,
-            "negative": p_reward_if_negative,
-            "neutral": p_reward_if_neutral,
-        }
+        self.valence_probs = valence_probs / jnp.sum(valence_probs)
 
-        self.current_valence=None
-        self.current_reward=None
+        self.reward_probs = jnp.array(
+            [
+                p_reward_if_positive,
+                p_reward_if_negative,
+                p_reward_if_neutral,
+            ],
+            dtype=jnp.float32,
+        )
 
-
-    def step(self, action="scroll"):
-        """
-        Generate one L1 observation.
-
-        Returns observation indices for the L1 agent:
-            obs_l1 = [
-                post_obs_idx,
-                post_valence_obs_idx,
-                post_reward_obs_idx,
-            ]
-
-        1. Check that the action is "scroll".
-
-        2. Randomly choose the next post type:
-            positive / negative / neutral
-
-        3. Based on that post type, randomly decide whether reward happens.
-
-        4. Convert the labels into indices.
-
-        5. Return the observation to the L1 agent.
-        """
-
+    def step(self, key, action="scroll"):
         if action != "scroll":
-            raise ValueError(f"L1 only understands action='scroll', got {action}")
+            raise ValueError(
+                f"L1 only understands action='scroll', got {action}"
+            )
 
-        valences = list(self.valence_probs.keys())
-        probs = np.array([self.valence_probs[v] for v in valences], dtype=float)
-        # Normalise them
-        probs = probs / probs.sum()
+        key_valence, key_reward = jr.split(key)
 
-        #This samples the valences randomly, 
-        # TODO: here I can add the second agent that samples the stuff 
-        # looking at what keeps the first agent engaged which we know being 
-        # some kind of stuff. 
-        sampled_valence = self.rng.choice(valences, p=probs)
-        self.current_valence = sampled_valence
+        # 1. Sample hidden post valence.
+        valence_idx = jr.categorical(
+            key_valence,
+            jnp.log(self.valence_probs),
+        )
 
-        # Given the kind of post we sampled, what is the probability that the user experiences reward?
-        p_reward = self.reward_probs[sampled_valence]
-        # TODO: this is a weird way to decide whether reward happened 
-        # it basically samples a random from 0 to 1 and is true if it is < then p_reward..
-        reward_happened = self.rng.random() < p_reward
+        valence_idx = valence_idx.astype(jnp.int32)
 
-        sampled_reward = "reward" if reward_happened else "no_reward"
-        self.current_reward = sampled_reward
+        # 2. Sample reward conditional on valence.
+        p_reward = self.reward_probs[valence_idx]
 
-        post_obs_idx = POST_OBS.index("post")
-        valence_obs_idx = POST_VALENCE.index(sampled_valence)
-        reward_obs_idx = POST_REWARD.index(sampled_reward)
+        reward_happened = jr.bernoulli(
+            key_reward,
+            p=p_reward,
+        )
 
-        return [post_obs_idx, valence_obs_idx, reward_obs_idx]
+        # POST_REWARD = ["reward", "no_reward"]
+        reward_idx = jnp.where(
+            reward_happened,
+            jnp.array(0, dtype=jnp.int32),
+            jnp.array(1, dtype=jnp.int32),
+        )
 
-    def reset(self):
-        self.current_valence = None
-        self.current_reward = None
+        # Important pymdp/JAX format:
+        # one integer per batch element.
+        obs_l1 = [
+            jnp.array([valence_idx], dtype=jnp.int32),
+            jnp.array([reward_idx], dtype=jnp.int32),
+        ]
+
+        valence_idx_int = int(valence_idx)
+        reward_idx_int = int(reward_idx)
+
+        info = {
+            "true_valence_idx": valence_idx_int,
+            "true_valence_label": POST_VALENCE[valence_idx_int],
+            "post_reward_idx": reward_idx_int,
+            "post_reward_label": POST_REWARD[reward_idx_int],
+        }
+
+        return obs_l1, info
