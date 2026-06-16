@@ -12,7 +12,7 @@ from hier_link_utils import (
     get_l2_obs_from_l1,
     l1_reward_to_l2_reward_label,
 )
-
+from plot_history import plot_history
 
 VERBOSE = True
 T2 = 12
@@ -66,7 +66,8 @@ for t2 in range(T2):
 
     true_self_state_before = l2_env.self_state
     feed_active = l2_env.is_feed_active()
-    affect_label = l2_env.get_affect_obs()
+    rng_key, key_affect = jr.split(rng_key)
+    affect_label = l2_env.get_affect_obs(key_affect)
 
     posterior_L1 = None
     l1_info = None
@@ -231,3 +232,9 @@ for row in history:
         f"affect={row['l2_affect_obs']} | "
         f"action={row['l2_action']}"
     )
+
+plot_history(
+    history,
+    filename="scrolling_flow.png",
+    show=True,
+)

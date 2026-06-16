@@ -18,12 +18,13 @@ class L2ScrollingEnv:
         - delayed/no reward when the feed is inactive
     """
 
-    def __init__(self, starting_state="scrolling_ok", p_hooked_from_ok=0.3):
+    def __init__(self, starting_state="scrolling_ok", p_hooked_from_ok=0.3, p_awareness_when_hooked=0.15):
         if starting_state not in SELF_STATE:
             raise ValueError(f"Unknown starting state: {starting_state}")
 
         self.state_idx = SELF_STATE.index(starting_state)
         self.p_hooked_from_ok = p_hooked_from_ok
+        self.p_awareness_when_hooked = p_awareness_when_hooked
 
     @property
     def self_state(self):
@@ -38,11 +39,21 @@ class L2ScrollingEnv:
     def is_feed_active(self):
         return self.self_state in ["scrolling_ok", "scrolling_hooked"]
 
-    def get_affect_obs(self):
+    # Now the true environment can sometimes generate bad_feeling, 
+    # but most hooked states still feel like scroll_relief.
+    def get_affect_obs(self, key = None):
         if self.self_state == "scrolling_ok":
             return "scroll_relief"
         if self.self_state == "scrolling_hooked":
-            return "bad_feeling"
+            if key is None: 
+                return "scroll_relief"
+            realizes_hooked = bool(
+                jr.bernoulli(key, p=self.p_awareness_when_hooked)
+            )
+            if realizes_hooked: 
+                return "bad_feeling"
+            return "scroll_relief"
+    
         if self.self_state in ["withdrawal_1", "withdrawal_2"]:
             return "urge"
         if self.self_state == "recovered_reward":
@@ -74,7 +85,7 @@ class L2ScrollingEnv:
         if action == "continue_scrolling":
             self._continue_scrolling(key)
         elif action == "opt_out":
-            self._opt_out()
+            self._opt_out(key)
         else:
             raise ValueError(f"Unknown L2 action: {action}")
 
@@ -93,13 +104,25 @@ class L2ScrollingEnv:
             # Restarting after recovery.
             self.state_idx = SELF_STATE.index("scrolling_ok")
 
-    def _opt_out(self):
+    def _opt_out(self, key):
         if self.self_state in ["scrolling_ok", "scrolling_hooked"]:
             self.state_idx = SELF_STATE.index("withdrawal_1")
+
         elif self.self_state == "withdrawal_1":
-            self.state_idx = SELF_STATE.index("withdrawal_2")
+            progresses = bool(jr.bernoulli(key, p= 0.40))
+            if progresses:
+                self.state_idx = SELF_STATE.index("withdrawal_2")
+            else:
+                self.state_idx = SELF_STATE.index("withdrawal_1")
+        
         elif self.self_state == "withdrawal_2":
-            self.state_idx = SELF_STATE.index("recovered_reward")
+            recovers = bool(jr.bernoulli(key, p=0.50))
+
+            if recovers: 
+                self.state_idx = SELF_STATE.index("recovered_reward")
+            else:
+                self.state_idx = SELF_STATE.index("withdrawal_2")
+
         elif self.self_state == "recovered_reward":
             self.state_idx = SELF_STATE.index("recovered_no_reward")
         elif self.self_state == "recovered_no_reward":

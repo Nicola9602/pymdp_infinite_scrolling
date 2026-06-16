@@ -124,8 +124,9 @@ def init_L2_model():
     # phenomenologically: as urge/discomfort observations.
     model.A["affect_obs"]["scroll_relief", "scrolling_ok"] = 1.0
 
-    model.A["affect_obs"]["bad_feeling", "scrolling_hooked"] = 0.7
-    model.A["affect_obs"]["scroll_relief", "scrolling_hooked"] = 0.3
+    #The agent can be hooked without clearly feeling bad.
+    model.A["affect_obs"]["bad_feeling", "scrolling_hooked"] = 0.15
+    model.A["affect_obs"]["scroll_relief", "scrolling_hooked"] = 0.85
 
     model.A["affect_obs"]["urge", "withdrawal_1"] = 1.0
     model.A["affect_obs"]["urge", "withdrawal_2"] = 1.0
@@ -177,9 +178,17 @@ def init_L2_model():
     model.B["self_state"]["withdrawal_1", "scrolling_ok", "opt_out"] = 1.0
     model.B["self_state"]["withdrawal_1", "scrolling_hooked", "opt_out"] = 1.0
     
-    # then recovery
-    model.B["self_state"]["withdrawal_2", "withdrawal_1", "opt_out"] = 1.0
-    model.B["self_state"]["recovered_reward", "withdrawal_2", "opt_out"] = 1.0
+    # If already in withdrawal_1, staying off may keep you there
+    # or move you deeper into withdrawal.
+    model.B["self_state"]["withdrawal_1", "withdrawal_1", "opt_out"] = 0.60
+    model.B["self_state"]["withdrawal_2", "withdrawal_1", "opt_out"] = 0.40
+
+    # If in withdrawal_2, staying off may remain painful
+    # or finally reach recovery.
+    model.B["self_state"]["withdrawal_2", "withdrawal_2", "opt_out"] = 0.50
+    model.B["self_state"]["recovered_reward", "withdrawal_2", "opt_out"] = 0.50
+
+    # Deep relief decays into boredom.
     model.B["self_state"]["recovered_no_reward", "recovered_reward", "opt_out"] = 1.0
     model.B["self_state"]["recovered_no_reward", "recovered_no_reward", "opt_out"] = 1.0
     model.B["self_state"].normalize()
