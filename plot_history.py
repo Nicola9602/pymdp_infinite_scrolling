@@ -50,6 +50,7 @@ def plot_history(history, filename="scrolling_flow.png", show=True):
     tracks = [
         ("true_self_state_before", "State before"),
         ("true_self_state_after", "State after"),
+        ("l2_belief_self_state", "L2 believed state"),
         ("l2_action", "L2 action"),
         ("l2_affect_obs", "Affect"),
         ("l2_reward_report", "Reward"),
