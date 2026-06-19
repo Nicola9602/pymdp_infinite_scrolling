@@ -41,17 +41,23 @@ class L2ScrollingEnv:
 
     # Now the true environment can sometimes generate bad_feeling, 
     # but most hooked states still feel like scroll_relief.
+    # What is the current self_state (from act_inf_loop)
+    # Given that state, what affect obs should the env emit?
     def get_affect_obs(self, key = None):
         if self.self_state == "scrolling_ok":
             return "scroll_relief"
         if self.self_state == "scrolling_hooked":
-            if key is None: 
+            if key is None: # Which means the agent cannot be aware of its hookedness
                 return "scroll_relief"
             realizes_hooked = bool(
+                # The agent can get aware (he's smart!) Here p_awareness_when_hooked is a prob governing how many
+                # keys will generate bad_feeling or scroll_relief
                 jr.bernoulli(key, p=self.p_awareness_when_hooked)
             )
+            # If by chance awarness happens return bad feeling
             if realizes_hooked: 
                 return "bad_feeling"
+            # If awareness does not happen return
             return "scroll_relief"
     
         if self.self_state in ["withdrawal_1", "withdrawal_2"]:
