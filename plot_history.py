@@ -70,6 +70,7 @@ def plot_history(history, filename="scrolling_flow.png", show=True):
     if n_tracks == 1:
         axes = [axes]
 
+
     # ------------------------------------------------------------------
     # Plot each categorical variable as a timeline
     # ------------------------------------------------------------------
