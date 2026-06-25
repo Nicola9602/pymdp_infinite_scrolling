@@ -34,3 +34,45 @@ SELF_STATE = [
 REWARD_REPORT = ["no_reward", "quick_reward", "delayed_reward"]
 AFFECT_OBS = ["okay", "scroll_relief", "urge", "bad_feeling", "deep_relief", "boredom"]
 L2_ACTIONS = ["continue_scrolling", "opt_out"]
+
+
+
+# -----------------------------
+# Level 3: metacognitive awareness level
+# -----------------------------
+
+# TODO: here I am using some words for a counting of behavioural obs incoming, 
+# not sure that's the smartest way
+
+# L3 receives evidence over the last K L2 actions.
+# Smaller K = frequent self-checking.
+# Larger K = longer flow before awareness kicks in.
+L3_UPDATE_EVERY = 20
+
+
+L3_BEHAVIOR_EVIDENCE_OBS = [
+    "insufficient_history",
+    "brief_voluntary_use",
+    "extended_but_stable_use",
+    "persistent_scrolling",
+    "persistent_scrolling_with_hooked_belief",
+    "failed_optout",
+    "relapse_after_optout",
+    "succesfull_optout",
+]
+
+L3_CONTROL_STATE = [
+    "in_control",
+    "flow_absorbed",
+    "losing_control",
+    "aware_of_hookedness",
+    "commited_to_recovery",
+    "safe",
+]
+
+L3_ACTIONS = [
+    "stay_in_flow",
+    "increase_awareness",
+    "commit_to_recovery",
+    "be_proud",
+]
