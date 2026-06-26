@@ -97,90 +97,106 @@ def get_l2_obs_from_l1(
 
     return obs_l2
 
+import warnings
+from jax import numpy as jnp
+
+from config import L3_BEHAVIOR_EVIDENCE_OBS
+
+
 def l2_history_to_l3_behavior_evidence(
     l2_action_history,
-    l2_belief_history,
-    k,
-    persistent_scroll_threshold=0.80,
+    l2_belief_history=None,
+    k=20,
+    brief_use_threshold=0.25,
+    successful_optout_threshold=0.50,
 ):
     """
-    Convert the last K L2 actions into one L3 behavioral evidence observation.
+    Convert recent L2 behavior into one simplified L3 evidence label.
 
-    L3 does not receive "I am in control" as an observation.
+    Possible outputs:
 
-    Instead, it receives evidence computed from L2 behavior, such as:
-        - persistent scrolling
-        - persistent scrolling while L2 believes it is hooked
-        - failed opt-out
-        - relapse after opt-out
+        insufficient_history   # warning-only label, NOT an L3 observation
+        brief_use
+        persistent_scrolling
+        failed_optout
+        successful_optout
 
-    l2_action_history:
-        list of L2 action labels, e.g.
-        ["continue_scrolling", "continue_scrolling", "opt_out", ...]
-
-    l2_belief_history:
-        list of L2 believed self-state labels, e.g.
-        ["scrolling_ok", "scrolling_hooked", ...]
+    Notes:
+        - insufficient_history should not be in L3_BEHAVIOR_EVIDENCE_OBS.
+        - relapse_after_optout is collapsed into failed_optout.
+        - extended_but_stable_use is collapsed into persistent_scrolling.
+        - persistent_scrolling_with_hooked_belief is collapsed into persistent_scrolling.
+        - l2_belief_history is kept only for backward compatibility.
     """
 
+    if k <= 0:
+        raise ValueError("k must be > 0")
+
     if len(l2_action_history) < k:
+        warnings.warn(
+            "Not enough L2 history to build an L3 observation. "
+            "Returning warning-only label: insufficient_history.",
+            RuntimeWarning,
+        )
         return "insufficient_history"
 
     action_window = l2_action_history[-k:]
-    belief_window = l2_belief_history[-k:]
+
+    valid_actions = {"continue_scrolling", "opt_out"}
+
+    invalid_actions = [
+        action for action in action_window
+        if action not in valid_actions
+    ]
+
+    if invalid_actions:
+        raise ValueError(f"Unknown L2 actions in history: {invalid_actions}")
 
     n_continue = sum(
         action == "continue_scrolling"
         for action in action_window
     )
 
-    frac_continue = n_continue / float(k)
-
-    has_optout = any(
+    n_optout = sum(
         action == "opt_out"
         for action in action_window
     )
 
-    has_hooked_belief = any(
-        belief == "scrolling_hooked"
-        for belief in belief_window
-    )
+    frac_continue = n_continue / float(k)
+    frac_optout = n_optout / float(k)
 
-    # Detect relapse:
-    # the agent opted out at some point, then later returned to scrolling.
-    last_optout_idx = None
+    first_optout_idx = None
+
     for idx, action in enumerate(action_window):
         if action == "opt_out":
-            last_optout_idx = idx
+            first_optout_idx = idx
+            break
 
-    if last_optout_idx is not None:
-        actions_after_last_optout = action_window[last_optout_idx + 1:]
+    # Case 1: there was at least one opt-out.
+    if first_optout_idx is not None:
+        actions_after_first_optout = action_window[first_optout_idx + 1:]
+
         returned_to_scrolling = any(
             action == "continue_scrolling"
-            for action in actions_after_last_optout
+            for action in actions_after_first_optout
         )
 
+        # Opted out, then returned to scrolling.
+        # This collapses relapse_after_optout into failed_optout.
         if returned_to_scrolling:
-            return "relapse_after_optout"
+            return "failed_optout"
 
-    # Detect failed opt-out:
-    # there is at least one opt-out, but the window is still dominated by scrolling.
-    if has_optout and frac_continue >= 0.60:
-        return "failed_optout"
+        # Mostly opted out and did not return to scrolling.
+        # This is evidence of control.
+        if frac_optout >= successful_optout_threshold:
+            return "successful_optout"
 
-    # Key doomscrolling evidence:
-    # persistent scrolling while L2 already believes it is hooked.
-    if frac_continue >= persistent_scroll_threshold and has_hooked_belief:
-        return "persistent_scrolling_with_hooked_belief"
+    # Case 2: little or no scrolling.
+    if frac_continue <= brief_use_threshold:
+        return "brief_use"
 
-    if frac_continue >= persistent_scroll_threshold:
-        return "persistent_scrolling"
-
-    # Mostly not scrolling / mostly opting out.
-    if frac_continue <= 0.25:
-        return "brief_voluntary_use"
-
-    return "extended_but_stable_use"
+    # Case 3: everything else is persistent scrolling.
+    return "persistent_scrolling"
 
 
 def get_l3_obs_from_l2_history(
@@ -191,11 +207,16 @@ def get_l3_obs_from_l2_history(
     """
     Build the L3 observation from recent L2 history.
 
-    Returned format uses the same pymdp/JAX-style discrete format:
+    Returned format, when history is sufficient:
 
         [jnp.array([idx], dtype=jnp.int32)]
 
-    This keeps L3 compatible with the same observation style used by L1 and L2.
+    If history is insufficient, return:
+
+        None, "insufficient_history"
+
+    This prevents insufficient_history from being treated as an actual
+    L3 observation.
     """
 
     evidence_label = l2_history_to_l3_behavior_evidence(
@@ -203,6 +224,15 @@ def get_l3_obs_from_l2_history(
         l2_belief_history=l2_belief_history,
         k=k,
     )
+
+    if evidence_label == "insufficient_history":
+        return None, evidence_label
+
+    if evidence_label not in L3_BEHAVIOR_EVIDENCE_OBS:
+        raise ValueError(
+            f"Evidence label {evidence_label!r} is not in "
+            "L3_BEHAVIOR_EVIDENCE_OBS."
+        )
 
     evidence_idx = L3_BEHAVIOR_EVIDENCE_OBS.index(evidence_label)
 

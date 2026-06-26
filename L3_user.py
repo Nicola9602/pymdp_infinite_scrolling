@@ -41,3 +41,71 @@ def init_L3_model():
     The meta-action does not directly force L2 to opt out.
     Instead, it modulates L2's awareness and preferences.
     """
+
+    model_description = {
+        "observations":{
+            "behavior_evidence_obs": {
+                "elements": L3_BEHAVIOR_EVIDENCE_OBS,
+                "depends_on": ["control_state"],
+            },
+        },
+        "controls": {
+            "meta_choice": {
+                "elements": L3_ACTIONS,
+            },
+        },
+        "states": {
+            "control_state": {
+                "elements": L3_CONTROL_STATE,
+                "depends_on": ["control_state"],
+                "controlled_by": ["meta_choice"],
+            },
+        },
+    }
+
+    model = compile_model(model_description)
+
+    # ------------------------------------------------------------------
+    # A: likelihood mapping
+    # A["behavior_evidence_obs"][observation, hidden_control_state]
+    # ------------------------------------------------------------------
+    
+    # Evidence compatible with control.
+    model.A["behavior_evidence_obs"]["brief_use", "in_control"] = 0.55
+    model.A["behavior_evidence_obs"]["successful_optout", "in_control"] = 0.99
+    model.A["behavior_evidence_obs"]["persistent_scrolling", "in_control"] = 0.01
+    model.A["behavior_evidence_obs"]["failed_optout", "in_control"] = 0.01
+
+    # Evidence compatible with loss of control.
+    model.A["behavior_evidence_obs"]["brief_use", "not_in_control"] = 0.01
+    model.A["behavior_evidence_obs"]["successful_optout", "not_in_control"] = 0.01
+    model.A["behavior_evidence_obs"]["persistent_scrolling", "not_in_control"] = 0.99
+    model.A["behavior_evidence_obs"]["failed_optout", "not_in_control"] = 0.99
+
+    model.A["behavior_evidence_obs"].normalize()
+
+        # ------------------------------------------------------------------
+    # B: transition mapping
+    #
+    # B["control_state"][next_state, previous_state, action]
+    # ------------------------------------------------------------------
+
+    # Action: stay_in_control
+    # This means: L3 engages the oversight mechanism.
+    # In the full hierarchy, this should perturb L2 by increasing awareness.
+    model.B["control_state"]["in_control", "in_control", "stay_in_control"] = 0.95
+    model.B["control_state"]["not_in_control", "in_control", "stay_in_control"] = 0.05
+
+    model.B["control_state"]["in_control", "not_in_control", "stay_in_control"] = 0.99
+    model.B["control_state"]["not_in_control", "not_in_control", "stay_in_control"] = 0.01
+        model.B["control_state"]["not_in_control", "not_in_control", "stay_in_control"] = 0.01
+
+    # Action: stay_hooked
+    # This means: L3 does not intervene / allows the hooked loop to continue.
+    model.B["control_state"]["in_control", "in_control", "stay_hooked"] = 0.01
+    model.B["control_state"]["not_in_control", "in_control", "stay_hooked"] = 0.99
+
+    model.B["control_state"]["in_control", "not_in_control", "stay_hooked"] = 0.01
+    model.B["control_state"]["not_in_control", "not_in_control", "stay_hooked"] = 0.99
+
+    model.B["control_state"].normalize()
