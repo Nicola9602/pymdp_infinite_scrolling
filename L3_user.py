@@ -69,18 +69,20 @@ def init_L3_model():
     # A: likelihood mapping
     # A["behavior_evidence_obs"][observation, hidden_control_state]
     # ------------------------------------------------------------------
-    
+    #With a flat prior using 0.495 and 0.005 should then after normalization give 99% and 1% 
+
+
     # Evidence compatible with control.
-    model.A["behavior_evidence_obs"]["brief_use", "in_control"] = 0.55
-    model.A["behavior_evidence_obs"]["successful_optout", "in_control"] = 0.99
-    model.A["behavior_evidence_obs"]["persistent_scrolling", "in_control"] = 0.01
-    model.A["behavior_evidence_obs"]["failed_optout", "in_control"] = 0.01
+    model.A["behavior_evidence_obs"]["brief_use", "in_control"] = 0.495
+    model.A["behavior_evidence_obs"]["successful_optout", "in_control"] = 0.495
+    model.A["behavior_evidence_obs"]["persistent_scrolling", "in_control"] = 0.005
+    model.A["behavior_evidence_obs"]["failed_optout", "in_control"] = 0.005
 
     # Evidence compatible with loss of control.
-    model.A["behavior_evidence_obs"]["brief_use", "not_in_control"] = 0.01
-    model.A["behavior_evidence_obs"]["successful_optout", "not_in_control"] = 0.01
-    model.A["behavior_evidence_obs"]["persistent_scrolling", "not_in_control"] = 0.99
-    model.A["behavior_evidence_obs"]["failed_optout", "not_in_control"] = 0.99
+    model.A["behavior_evidence_obs"]["brief_use", "not_in_control"] = 0.005
+    model.A["behavior_evidence_obs"]["successful_optout", "not_in_control"] = 0.005
+    model.A["behavior_evidence_obs"]["persistent_scrolling", "not_in_control"] = 0.495
+    model.A["behavior_evidence_obs"]["failed_optout", "not_in_control"] = 0.495
 
     model.A["behavior_evidence_obs"].normalize()
 
@@ -98,7 +100,6 @@ def init_L3_model():
 
     model.B["control_state"]["in_control", "not_in_control", "stay_in_control"] = 0.99
     model.B["control_state"]["not_in_control", "not_in_control", "stay_in_control"] = 0.01
-        model.B["control_state"]["not_in_control", "not_in_control", "stay_in_control"] = 0.01
 
     # Action: stay_hooked
     # This means: L3 does not intervene / allows the hooked loop to continue.
@@ -109,3 +110,53 @@ def init_L3_model():
     model.B["control_state"]["not_in_control", "not_in_control", "stay_hooked"] = 0.99
 
     model.B["control_state"].normalize()
+
+
+    # ------------------------------------------------------------------
+    # C: preferences over L3 observations
+    # -----------------------------------------------------------------
+    # There are no preferences whatsoever... 
+
+    for evidence_label in L3_BEHAVIOR_EVIDENCE_OBS: 
+        model.C["behavior_evidence_obs"][evidence_label] = 0.0
+
+    # ------------------------------------------------------------------
+    # D: prior over L3 hidden control state
+    # ------------------------------------------------------------------   
+
+    # Flat prior the Agent does not know where it starts from 
+
+    model.D["control_state"]["in_control"] = 0.50
+    model.D["control_state"]["not_in_control"] = 0.50
+    model.D["control_state"].normalize()
+
+    # ------------------------------------------------------------------
+    # Human-readable mappings
+    # ------------------------------------------------------------------
+    
+    mappings = {
+        "behavior_evidence_obs_names": L3_BEHAVIOR_EVIDENCE_OBS,
+        "control_state_names": L3_CONTROL_STATE,
+        "meta_choice_names": L3_ACTIONS,
+    }
+
+
+    dimensions = {
+        "num_obs": [len(L3_BEHAVIOR_EVIDENCE_OBS)],
+        "num_states": [len(L3_CONTROL_STATE)],
+        "num_controls": [len(L3_ACTIONS)],
+    }
+
+    # ------------------------------------------------------------------
+    # Return everything needed by act_inf_loop.py
+    # ------------------------------------------------------------------
+    #
+    # act_inf_loop.py expects:
+    #
+    #     l3_model, mappings_L3, dimensions_L3 = init_L3_model()
+    #
+    #  So this function returns:
+    # 1: Model: the compiled model containing A,B,C,D
+    # 2: Mappings & dimensions: for debugging
+
+    return model, mappings, dimensions

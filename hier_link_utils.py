@@ -122,7 +122,6 @@ def l2_history_to_l3_behavior_evidence(
         successful_optout
 
     Notes:
-        - insufficient_history should not be in L3_BEHAVIOR_EVIDENCE_OBS.
         - relapse_after_optout is collapsed into failed_optout.
         - extended_but_stable_use is collapsed into persistent_scrolling.
         - persistent_scrolling_with_hooked_belief is collapsed into persistent_scrolling.
@@ -241,3 +240,70 @@ def get_l3_obs_from_l2_history(
     ]
 
     return obs_l3, evidence_label
+
+
+def choose_l3_meta_action_from_belief(
+    qs_l3,
+    not_in_control_threshold=0.50,
+):
+    """
+    Rule-based L3 overseer.
+
+    L3 infers whether the system is:
+
+        in_control
+        not_in_control
+
+    This function converts that belief into a meta-action:
+
+        stay_in_control
+        stay_hooked
+
+    If L3 believes the system is not in control strongly enough,
+    it activates the control/awareness intervention.
+
+    Otherwise, it does not intervene and lets the hooked loop continue.
+    """
+
+    control_belief = qs_l3[0]
+
+    p_in_control = float(control_belief[0])
+    p_not_in_control = float(control_belief[1])
+
+    if p_not_in_control >= not_in_control_threshold:
+        return "stay_in_control"
+
+    return "stay_hooked"
+
+def apply_l3_meta_action_to_l2_env(
+    l2_env,
+    meta_action,
+    awareness_when_intervening=0.80,
+    awareness_when_not_intervening=0.05,
+):
+    """
+    Apply L3's meta-action as a perturbation to the L2 environment.
+
+    L3 does not directly force L2 to opt out.
+
+    Instead, it changes how likely the L2 environment is to generate
+    awareness of hookedness.
+
+    stay_in_control:
+        increase p_awareness_when_hooked.
+        Hooked scrolling is more likely to feel bad / become visible.
+
+    stay_hooked:
+        decrease p_awareness_when_hooked.
+        Hooked scrolling is more likely to stay hidden as scroll_relief.
+    """
+
+    if meta_action == "stay_in_control":
+        l2_env.p_awareness_when_hooked = awareness_when_intervening
+        return l2_env.p_awareness_when_hooked
+
+    if meta_action == "stay_hooked":
+        l2_env.p_awareness_when_hooked = awareness_when_not_intervening
+        return l2_env.p_awareness_when_hooked
+
+    raise ValueError(f"Unknown L3 meta-action: {meta_action}")

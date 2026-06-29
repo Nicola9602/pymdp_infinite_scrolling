@@ -4,14 +4,24 @@ from jax import random as jr
 from jax import numpy as jnp
 from pymdp.agent import Agent
 
-from config import L2_ACTIONS, SELF_STATE
 from L1_user import init_L1_model
 from L2_user import init_L2_model
+from L3_user import init_L3_model
 from L1_scrolling_env import L1ScrollingEnv
 from L2_scrolling_env import L2ScrollingEnv
+from config import (
+    L2_ACTIONS,
+    SELF_STATE,
+    L3_UPDATE_EVERY,
+    L3_CONTROL_STATE,
+    L3_ACTIONS,
+)
 from hier_link_utils import (
     get_l2_obs_from_l1,
     l1_reward_to_l2_reward_label,
+    get_l3_obs_from_l2_history,
+    choose_l3_meta_action_from_belief,
+    apply_l3_meta_action_to_l2_env,
 )
 from plot_history import plot_history
 
@@ -85,11 +95,58 @@ l2_env = L2ScrollingEnv(
 l2_empirical_prior = l2_agent.D
 
 # ------------------------------------------------------------------
+# Initialize L3 agent
+# -----------------------------------------------------------------
+# L3 is the metacognitive overseer.
+#
+# It does not directly choose L2 actions.
+# It observes recent L2 behavior and infers whether the system is:
+#
+#     in_control
+#     not_in_control
+#
+# Then, through a rule-based bridge, it perturbs L2 by changing
+# l2_env.p_awareness_when_hooked.
+#
+# This means L3 acts by changing how likely hookedness is to become visible
+# to L2 as "bad_feeling".
+
+l3_model, mappings_L3, dimensions_L3 = init_L3_model()
+
+l3_agent = Agent(
+    **l3_model, 
+    batch_size=1,
+    policy_len=1,
+    gamma=10.0,
+)
+
+# This stores L3's prior from one L3 update to the next.
+# We use it so L3 has temporal continuity instead of resetting every time.
+l3_empirical_prior = l3_agent.D
+
+# ------------------------------------------------------------------
 # Storage
 # ------------------------------------------------------------------
 
 history = []
 
+# These two lists store the recent behavior that L3 will read.
+#
+# l2_action_history:
+#     stores actions such as:
+#         "continue_scrolling"
+#         "opt_out"
+#
+# l2_belief_history:
+#     stores L2's believed self-state at each timestep, such as:
+#         "scrolling_ok"
+#         "scrolling_hooked"
+#         "withdrawal_1"
+#
+# Right now the simplified L3 evidence function mostly uses action history.
+# We still store belief history because it may be useful again later.
+l2_action_history = []
+l2_belief_history = []
 
 # ------------------------------------------------------------------
 # Main L2 loop
@@ -217,8 +274,110 @@ for t2 in range(T2):
             qs_l2,
         )
     print("L2 inference algorithm:", getattr(l2_agent, "inference_algo", None))
+
     # --------------------------------------------------------------
-    # 5. Store everything
+    # 5. Store recent L2 behavior for L3
+    # --------------------------------------------------------------
+    #
+    # L3 does not observe posts, rewards, or affect directly.
+    # It observes a compressed summary of L2 behavior over the last K steps.
+    #
+    # So after L2 has acted, we append:
+    #
+    #     1. what L2 did
+    #     2. what L2 believed about its own self-state
+    #
+    # This becomes the behavioral history that L3 reads.
+
+    l2_action_history.append(action_label)
+    l2_belief_history.append(l2_belief_label)
+
+
+    # --------------------------------------------------------------
+    # 6. Optional L3 update
+    # --------------------------------------------------------------
+    #
+    # L3 does not update every L2 timestep.
+    #
+    # Instead, it updates every L3_UPDATE_EVERY timesteps.
+    # For example, if L3_UPDATE_EVERY = 20, then L3 checks behavior at:
+    #
+    #     t2 = 19, 39, 59, ...
+    #
+    # because at t2 = 19 we have collected 20 L2 actions.
+    #
+    # The L3 update affects the NEXT L2 timestep, because it changes
+    # l2_env.p_awareness_when_hooked after the current L2 step is complete.
+
+    l3_update_ran = False
+    l3_evidence_label= None
+    l3_control_state_label = None
+    l3_control_state_prob = None
+    l3_meta_action = None
+    l3_awareness_after = l2_env.p_awareness_when_hooked
+
+    if (t2+1) % L3_UPDATE_EVERY == 0:
+        # Build the L3 observation from the last K L2 actions.
+        # obs_l3 has pymdp/JAX format:[jnp.array([evidence_idx], dtype=jnp.int32)]
+
+        obs_l3, l3_evidence_label = get_l3_obs_from_l2_history(
+            l2_action_history=l2_action_history,
+            l2_belief_history=l2_belief_history,
+            k=L3_UPDATE_EVERY)
+
+    # L3 infers its hidden control state from behav evidence 
+    # if obs_l3 is not none
+
+    if obs_l3 is not None: 
+        l3_update_ran = True 
+
+        qs_l3 = l3_agent.infer_states(
+            obs_l3,
+            empirical_prior=l3_empirical_prior,
+        )
+    
+    # Convert L3 posterior into a human-readable label
+
+    control_state_belief = jnp.squeeze(qs_l3[0])
+    l3_control_state_idx = int(jnp.argmax(control_state_belief))
+
+    l3_control_state_label = L3_CONTROL_STATE[l3_control_state_idx]
+    l3_control_state_prob = float(control_state_belief[l3_control_state_idx])
+
+    #Chosse l3 action 
+    # if l3 thinks the system is not in control returns "stay_in_control"
+    # meaning: activate the awareness/control itnervention
+    # otherwise it returns: "stay_hooked"+
+    # meaning: do not intervene
+
+    l3_meta_action = choose_l3_meta_action_from_belief(qs_l3)
+
+    # APply the l3 meta action to the l2 environment. 
+    # This does not force any actioni it just changes p_awareness_when_hooked
+    # High awareness means hookedness is more likely to became a "bad feeling"
+    #Low awareness means hookedness is more likely to stay hidden as "scroll_relief"
+
+    l3_awareness_after = apply_l3_meta_action_to_l2_env(
+        l2_env = l2_env,
+        meta_action=l3_meta_action,
+    )
+
+    #Convert this into pymdp action format. 
+    # This lets us update l3's empirical prior through its B matrix.
+
+    l3_meta_action_idx = L3_ACTIONS.index(l3_meta_action)
+
+    chosen_action_L3 = [jnp.array([l3_meta_action_idx], dtype=jnp.int32)]
+
+    # Update l3's priors 
+
+    l3_empirical_prior = l3_agent.update_empirical_prior(
+        chosen_action_L3,
+        qs_l3,
+    )
+
+    # --------------------------------------------------------------
+    # 7. Store everything
     # --------------------------------------------------------------
 
     history.append(
@@ -238,6 +397,12 @@ for t2 in range(T2):
             "qs_l2": qs_l2,
             "q_pi_L2": q_pi_L2,
             "neg_efe_L2": neg_efe_L2,
+            "l3_update_ran": l3_update_ran,
+            "l3_evidence": l3_evidence_label,
+            "l3_control_state": l3_control_state_label,
+            "l3_control_state_prob": l3_control_state_prob,
+            "l3_meta_action": l3_meta_action,
+            "l2_awareness_when_hooked": l3_awareness_after,
         }
     )
 
@@ -261,6 +426,15 @@ for t2 in range(T2):
             f"action={action_label} | "
             f"state_after={true_self_state_after}"
         )
+        if l3_update_ran:
+            print(
+                f"      L3 update | "
+                f"evidence={l3_evidence_label} | "
+                f"L3_belief={l3_control_state_label}"
+                f"({l3_control_state_prob:.2f}) | "
+                f"meta_action={l3_meta_action} | "
+                f"p_awareness_when_hooked={l3_awareness_after:.2f}"
+            )
 
 
 # ------------------------------------------------------------------
