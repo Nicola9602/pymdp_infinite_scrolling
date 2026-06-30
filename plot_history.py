@@ -52,10 +52,21 @@ def plot_history(history, filename="scrolling_flow.png", show=True):
         ("true_self_state_after", "State after"),
         ("l2_belief_self_state", "L2 believed state"),
         ("l2_action", "L2 action"),
-        ("l2_affect_obs", "Affect"),
-        ("l2_reward_report", "Reward"),
+        ("l2_affect_obs", "L2 affect"),
+        ("l2_reward_report", "L2 reward"),
         ("l1_true_valence", "L1 valence"),
         ("l1_reward", "L1 reward"),
+
+        # L3 tracks.
+        # These will only have non-None values on L3 update timesteps.
+        ("l3_evidence", "L3 evidence"),
+        ("l3_control_state", "L3 control belief"),
+        ("l3_meta_action", "L3 meta-action"),
+
+        # This one is numeric, but the current plotter treats all values
+        # categorically. That is okay for now because awareness usually
+        # only takes a few values, such as 0.05, 0.15, or 0.80.
+        ("l2_awareness_when_hooked", "L2 awareness p"),
     ]
 
     n_tracks = len(tracks)

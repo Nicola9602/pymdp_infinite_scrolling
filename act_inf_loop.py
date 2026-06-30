@@ -64,7 +64,7 @@ l1_agent = Agent(
     **l1_model,
     batch_size=1,
     policy_len=1,
-    gamma=10.0,
+    gamma=10.0, #Policy precision if one policy has higher FE it will not choose that 
 )
 
 env_l1 = L1ScrollingEnv()
@@ -328,53 +328,53 @@ for t2 in range(T2):
     # L3 infers its hidden control state from behav evidence 
     # if obs_l3 is not none
 
-    if obs_l3 is not None: 
-        l3_update_ran = True 
+        if obs_l3 is not None: 
+            l3_update_ran = True 
 
-        qs_l3 = l3_agent.infer_states(
-            obs_l3,
-            empirical_prior=l3_empirical_prior,
-        )
-    
-    # Convert L3 posterior into a human-readable label
+            qs_l3 = l3_agent.infer_states(
+                obs_l3,
+                empirical_prior=l3_empirical_prior,
+            )
+        
+            # Convert L3 posterior into a human-readable label
 
-    control_state_belief = jnp.squeeze(qs_l3[0])
-    l3_control_state_idx = int(jnp.argmax(control_state_belief))
+            control_state_belief = jnp.squeeze(qs_l3[0])
+            l3_control_state_idx = int(jnp.argmax(control_state_belief))
 
-    l3_control_state_label = L3_CONTROL_STATE[l3_control_state_idx]
-    l3_control_state_prob = float(control_state_belief[l3_control_state_idx])
+            l3_control_state_label = L3_CONTROL_STATE[l3_control_state_idx]
+            l3_control_state_prob = float(control_state_belief[l3_control_state_idx])
 
-    #Chosse l3 action 
-    # if l3 thinks the system is not in control returns "stay_in_control"
-    # meaning: activate the awareness/control itnervention
-    # otherwise it returns: "stay_hooked"+
-    # meaning: do not intervene
+            #Chosse l3 action 
+            # if l3 thinks the system is not in control returns "stay_in_control"
+            # meaning: activate the awareness/control itnervention
+            # otherwise it returns: "stay_hooked"+
+            # meaning: do not intervene
 
-    l3_meta_action = choose_l3_meta_action_from_belief(qs_l3)
+            l3_meta_action = choose_l3_meta_action_from_belief(qs_l3)
 
-    # APply the l3 meta action to the l2 environment. 
-    # This does not force any actioni it just changes p_awareness_when_hooked
-    # High awareness means hookedness is more likely to became a "bad feeling"
-    #Low awareness means hookedness is more likely to stay hidden as "scroll_relief"
+            # APply the l3 meta action to the l2 environment. 
+            # This does not force any actioni it just changes p_awareness_when_hooked
+            # High awareness means hookedness is more likely to became a "bad feeling"
+            #Low awareness means hookedness is more likely to stay hidden as "scroll_relief"
 
-    l3_awareness_after = apply_l3_meta_action_to_l2_env(
-        l2_env = l2_env,
-        meta_action=l3_meta_action,
-    )
+            l3_awareness_after = apply_l3_meta_action_to_l2_env(
+                l2_env = l2_env,
+                meta_action=l3_meta_action,
+            )
 
-    #Convert this into pymdp action format. 
-    # This lets us update l3's empirical prior through its B matrix.
+            #Convert this into pymdp action format. 
+            # This lets us update l3's empirical prior through its B matrix.
 
-    l3_meta_action_idx = L3_ACTIONS.index(l3_meta_action)
+            l3_meta_action_idx = L3_ACTIONS.index(l3_meta_action)
 
-    chosen_action_L3 = [jnp.array([l3_meta_action_idx], dtype=jnp.int32)]
+            chosen_action_L3 = [jnp.array([l3_meta_action_idx], dtype=jnp.int32)]
 
-    # Update l3's priors 
+            # Update l3's priors 
 
-    l3_empirical_prior = l3_agent.update_empirical_prior(
-        chosen_action_L3,
-        qs_l3,
-    )
+            l3_empirical_prior = l3_agent.update_empirical_prior(
+                chosen_action_L3,
+                qs_l3,
+            )
 
     # --------------------------------------------------------------
     # 7. Store everything
