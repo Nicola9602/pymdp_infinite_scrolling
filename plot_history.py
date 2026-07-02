@@ -57,6 +57,12 @@ def plot_history(history, filename="scrolling_flow.png", show=True):
         ("l1_true_valence", "L1 valence"),
         ("l1_reward", "L1 reward"),
 
+        ("algorithm_mode", "Algorithm mode"),
+        ("algorithm_event", "Algorithm event"),
+        ("feed_pull", "Feed pull"),
+        ("feed_p_hooked_from_ok", "Feed p hooked"),
+        ("feed_p_awareness_when_hooked", "Feed/L3 awareness p"),
+
         # L3 tracks.
         # These will only have non-None values on L3 update timesteps.
         ("l3_evidence", "L3 evidence"),

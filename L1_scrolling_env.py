@@ -54,6 +54,46 @@ class L1ScrollingEnv:
             dtype=jnp.float32,
         )
 
+    def set_feed_profile(self, valence_probs, reward_probs):
+        """
+        Update the L1 feed-generating process.
+
+        valence_probs:
+            [p_positive, p_negative, p_neutral]
+
+        reward_probs:
+            [
+                p_reward_if_positive,
+                p_reward_if_negative,
+                p_reward_if_neutral,
+            ]
+
+        This is how the adaptive feed changes the user's sensory field.
+        """
+
+        valence_probs = jnp.array(
+            valence_probs,
+            dtype=jnp.float32,
+        )
+
+        reward_probs = jnp.array(
+            reward_probs,
+            dtype=jnp.float32,
+        )
+
+        if valence_probs.shape[0] != len(POST_VALENCE):
+            raise ValueError(
+                f"valence_probs must have length {len(POST_VALENCE)}"
+            )
+
+        if reward_probs.shape[0] != len(POST_VALENCE):
+            raise ValueError(
+                f"reward_probs must have length {len(POST_VALENCE)}"
+            )
+
+        self.valence_probs = valence_probs / jnp.sum(valence_probs)
+        self.reward_probs = reward_probs
+
     def step(self, key, action="scroll"):
         if action != "scroll":
             raise ValueError(
@@ -79,6 +119,7 @@ class L1ScrollingEnv:
         )
 
         # POST_REWARD = ["reward", "no_reward"]
+        # Convert reward happened true false into a boolean 0 = True 1 = False
         reward_idx = jnp.where(
             reward_happened,
             jnp.array(0, dtype=jnp.int32),
@@ -92,6 +133,7 @@ class L1ScrollingEnv:
             jnp.array([reward_idx], dtype=jnp.int32),
         ]
 
+        #Convert it into normal index to index python lists
         valence_idx_int = int(valence_idx)
         reward_idx_int = int(reward_idx)
 

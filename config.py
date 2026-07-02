@@ -66,3 +66,20 @@ L3_ACTIONS = [
     "stay_in_control",
     "stay_hooked",
 ]
+
+# -----------------------------
+# Minimal adaptive feed algorithm
+# -----------------------------
+
+# Main experimental condition.
+# "passive" = fixed feed pull
+# "adversarial" = feed pull increases with continued scrolling / relapse
+# "supportive" = feed pull decreases when the user seems captured
+# ALGORITHM_MODE = "adversarial"
+ALGORITHM_MODE = "passive"
+# ALGORITHM_MODE = "supportive"
+
+# Initial feed pull.
+# 0.0 = low-pull feed
+# 1.0 = maximum high-pull feed
+FEED_PULL_INITIAL = 0.30

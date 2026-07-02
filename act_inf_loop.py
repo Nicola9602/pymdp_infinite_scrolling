@@ -11,10 +11,14 @@ from L1_scrolling_env import L1ScrollingEnv
 from L2_scrolling_env import L2ScrollingEnv
 from config import (
     L2_ACTIONS,
+    POST_REWARD,
+    POST_VALENCE,
     SELF_STATE,
     L3_UPDATE_EVERY,
     L3_CONTROL_STATE,
     L3_ACTIONS,
+    ALGORITHM_MODE,
+    FEED_PULL_INITIAL,
 )
 from hier_link_utils import (
     get_l2_obs_from_l1,
@@ -24,9 +28,14 @@ from hier_link_utils import (
     apply_l3_meta_action_to_l2_env,
 )
 from plot_history import plot_history
+from feed_algorithm import (
+    classify_algorithm_event,
+    update_feed_pull,
+    apply_feed_pull_to_env,
+)
 
 VERBOSE = True
-T2 = 60 
+T2 = 100 
 
 SEED = 4
 rng_key = jr.PRNGKey(SEED)
@@ -53,6 +62,10 @@ L2_P_AWARENESS_WHEN_HOOKED = 0.15
 # example of already doomscrolling but unaware 
 # L2_STARTING_STATE = "scrolling_hooked"
 # L2_P_AWARENESS_WHEN_HOOKED = 0.05
+
+L3_UPDATE_EVERY = 20
+FEED_PULL_INITIAL = 0.30
+
 
 # ------------------------------------------------------------------
 # Initialize L1 agent and L1 generative process
@@ -149,10 +162,72 @@ l2_action_history = []
 l2_belief_history = []
 
 # ------------------------------------------------------------------
+# Minimal adaptive feed algorithm
+# ------------------------------------------------------------------
+#
+# This is not a full platform POMDP.
+# It is a simple adaptive environment variable:
+#
+#     feed_pull in [0, 1]
+#
+# Higher feed_pull means:
+#     - more negative/salient content
+#     - more quick reward
+#     - higher p_hooked_from_ok
+#     - lower spontaneous awareness, unless L3 intervenes
+
+feed_pull = FEED_PULL_INITIAL
+
+# This keeps track of the most recent L3 intervention.
+# If L3 chooses stay_in_control, the feed algorithm will not overwrite
+# the awareness boost at the next timestep.
+current_l3_meta_action = "stay_hooked"
+
+algorithm_event = "initial"
+
+feed_params = apply_feed_pull_to_env(
+    feed_pull=feed_pull,
+    env_l1=env_l1,
+    l2_env=l2_env,
+    l3_meta_action=current_l3_meta_action,
+)
+# ------------------------------------------------------------------
 # Main L2 loop
 # ------------------------------------------------------------------
 
 for t2 in range(T2):
+    # --------------------------------------------------------------
+    # 0. Adaptive feed algorithm update
+    # --------------------------------------------------------------
+    #
+    # The algorithm reads the previous completed timestep from history.
+    # Then it updates feed_pull and applies the new feed parameters.
+    #
+    # This happens before the next L1 post is generated.
+
+    algorithm_event = classify_algorithm_event(history)
+
+    previous_feed_pull = feed_pull
+
+    last_l2_belief = None
+    if len(history) > 0:
+        last_l2_belief = history[-1]["l2_belief_self_state"]
+
+    feed_pull = update_feed_pull(
+        feed_pull=feed_pull,
+        algorithm_mode=ALGORITHM_MODE,
+        algorithm_event=algorithm_event,
+        l2_belief_label=last_l2_belief,
+        l3_meta_action=current_l3_meta_action,
+    )
+
+    feed_params = apply_feed_pull_to_env(
+        feed_pull=feed_pull,
+        env_l1=env_l1,
+        l2_env=l2_env,
+        l3_meta_action=current_l3_meta_action,
+    )
+    # MOdifies the feed before L1 generates next post 
 
     true_self_state_before = l2_env.self_state
     feed_active = l2_env.is_feed_active()
@@ -181,6 +256,10 @@ for t2 in range(T2):
             obs_l1,
             empirical_prior=l1_agent.D,
         )
+
+        # To check qs_l1 posterior uncomment this which tells you what the obs 
+        # dict(zip(POST_VALENCE, qs_l1[0].squeeze().tolist())) 
+        
 
         posterior_L1 = qs_l1
 
@@ -351,6 +430,7 @@ for t2 in range(T2):
             # meaning: do not intervene
 
             l3_meta_action = choose_l3_meta_action_from_belief(qs_l3)
+            current_l3_meta_action = l3_meta_action
 
             # APply the l3 meta action to the l2 environment. 
             # This does not force any actioni it just changes p_awareness_when_hooked
@@ -403,6 +483,14 @@ for t2 in range(T2):
             "l3_control_state_prob": l3_control_state_prob,
             "l3_meta_action": l3_meta_action,
             "l2_awareness_when_hooked": l3_awareness_after,
+            "algorithm_mode": ALGORITHM_MODE,
+            "algorithm_event": algorithm_event,
+            "feed_pull": feed_pull,
+            "previous_feed_pull": previous_feed_pull,
+            "feed_valence_probs": feed_params["valence_probs"],
+            "feed_reward_probs": feed_params["reward_probs"],
+            "feed_p_hooked_from_ok": feed_params["p_hooked_from_ok"],
+            "feed_p_awareness_when_hooked": feed_params["actual_p_awareness_when_hooked"],
         }
     )
 
@@ -424,7 +512,11 @@ for t2 in range(T2):
             f"affect={affect_label} | "
             f"L2_belief={l2_belief_label}({l2_belief_prob:.2f}) | "
             f"action={action_label} | "
-            f"state_after={true_self_state_after}"
+            f"state_after={true_self_state_after} | "
+            f"alg={ALGORITHM_MODE}:{algorithm_event} | "
+            f"feed_pull={feed_pull:.2f} | "
+            f"p_hook={feed_params['p_hooked_from_ok']:.2f} | "
+            f"p_aware={feed_params['actual_p_awareness_when_hooked']:.2f}"
         )
         if l3_update_ran:
             print(
@@ -476,6 +568,12 @@ for row in history:
 
 plot_history(
     history,
-    filename=f"scrolling_flow_{L2_PRIOR_MODE}_h{L2_POLICY_LEN}_seed{SEED}.png",
+    filename=(
+        f"scrolling_flow_"
+        f"{ALGORITHM_MODE}_"
+        f"{L2_PRIOR_MODE}_"
+        f"h{L2_POLICY_LEN}_"
+        f"seed{SEED}.png"
+    ),
     show=True,
 )

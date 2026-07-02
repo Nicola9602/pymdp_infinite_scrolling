@@ -265,7 +265,13 @@ def choose_l3_meta_action_from_belief(
     Otherwise, it does not intervene and lets the hooked loop continue.
     """
 
-    control_belief = qs_l3[0]
+    # qs_l3[0] may have batch dimensions, e.g. shape (2, 1, 1)
+    # or similar depending on pymdp/JAX internals.
+    # We squeeze it into a flat belief vector:
+    #
+    #     [p_in_control, p_not_in_control]
+    #
+    control_belief = jnp.squeeze(qs_l3[0])
 
     p_in_control = float(control_belief[0])
     p_not_in_control = float(control_belief[1])
